@@ -12,6 +12,7 @@ namespace Hourglass
 
 static thread_local Coroutine* t_coroutine = nullptr;
 static thread_local std::shared_ptr<Coroutine> t_thread_coroutine = nullptr;
+static thread_local Coroutine* t_scheduler_cor = nullptr;
 static std::atomic<uint64_t> t_coroutine_id{0};
 static std::atomic<uint64_t> t_coroutine_count{0};
 
@@ -29,6 +30,11 @@ void Coroutine::setCoroutine(Coroutine* cor)
     t_coroutine = cor;
 }
 
+void Coroutine::setSchedulerCortinue(Coroutine* cor)
+{
+    t_scheduler_cor = cor;
+}
+
 Coroutine::Coroutine()
 {
     setCoroutine(this);
@@ -42,7 +48,7 @@ Coroutine::Coroutine()
     t_coroutine_count++;
 }
 
-Coroutine::Coroutine(std::function<void()> func, size_t stack_size):coroutineFunc(func)
+Coroutine::Coroutine(std::function<void()> func, size_t stack_size,bool runinscheduler):coroutineFunc(func),runInSchedulerCor(runinscheduler)
 {
     setCoroutine(this);
     coroutineState = READY;
@@ -74,11 +80,23 @@ void Coroutine::resume()
 {
     assert(coroutineState == READY);
     coroutineState = RUNNING;
-    setCoroutine(this);
-    if(swapcontext(&(t_thread_coroutine->coroutineCT),&coroutineCT))
+    if(runInSchedulerCor)
     {
-	std::cerr << "resume() failed!\n";
-	pthread_exit(NULL);
+	setCoroutine(this);
+	if(swapcontext(&(t_scheduler_cor->coroutineCT),&coroutineCT))
+	{
+	    std::cerr << "resume() to t_scheduler_coroutine failed!\n";
+	    pthread_exit(NULL);
+	}
+    }
+    else 
+    {
+	setCoroutine(this);
+	if(swapcontext(&(t_thread_coroutine->coroutineCT),&coroutineCT))
+	{
+	    std::cerr << "resume() failed!\n";
+	    pthread_exit(NULL);
+	}
     }
 }
 
@@ -89,11 +107,23 @@ void Coroutine::yield()
     {
 	coroutineState = READY;
     }
-    setCoroutine(this);
-    if(swapcontext(&coroutineCT,&(t_thread_coroutine->coroutineCT)))
+    if(runInSchedulerCor)
     {
-	std::cerr << "yield() falied!\n";
-	pthread_exit(NULL);
+	setCoroutine(this);
+	if(swapcontext(&coroutineCT,&(t_scheduler_cor->coroutineCT)))
+	{
+	    std::cerr << "yield() t_scheduler_cor failed!\n";
+	    pthread_exit(NULL);
+	}
+    }
+    else
+    {
+	setCoroutine(this);
+	if(swapcontext(&coroutineCT,&(t_thread_coroutine->coroutineCT)))
+	{
+	    std::cerr << "yield() falied!\n";
+	    pthread_exit(NULL);
+	}
     }
 }
 
@@ -121,6 +151,7 @@ std::shared_ptr<Coroutine> Coroutine::getCoroutine()
     }
     std::shared_ptr<Coroutine> main_cor(new Coroutine());
     t_thread_coroutine = main_cor;
+    t_scheduler_cor = main_cor.get();//除非主动设置，主协程默认是调度协程
     // assert 条件为假抛出错误！
     assert(t_coroutine == main_cor.get());
     return t_coroutine->shared_from_this();
