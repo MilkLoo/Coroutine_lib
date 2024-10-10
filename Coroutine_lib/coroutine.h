@@ -23,12 +23,13 @@ namespace Hourglass{
     // 也就是与已有的共享一个引用计数．
 class Coroutine: public std::enable_shared_from_this<Coroutine>
 {
+public:
+    enum State{RUNNING,READY,TERM};
 protected:
     // 基本 Data
     // 协程ＩＤ
     uint64_t coroutineID = 0;
     // 协程状态　简化
-    enum State{RUNNING, READY, TERM};
     State coroutineState = READY;
     // 上下文结构
     ucontext_t coroutineCT;
@@ -55,7 +56,7 @@ public:
     /* 协程行为相关的成员　behavior */
     // 无参构造　由于不想直接通过类进行创建实例，通过方法直接进行构造，转化为私有化．
     // 有参构造
-    Coroutine(std::function<void()> func, size_t stack_size,bool runinscheduler=true);
+    Coroutine(std::function<void()> func, size_t stack_size=0,bool runinscheduler=true);
     // 析构
     ~Coroutine();
     // 利用类对getCoroutine方法进行调用无参构造，提供一个用户接口
@@ -74,6 +75,7 @@ public:
     static void mainFunc();
     // 设置调度协程，默认主协程
     static void setSchedulerCortinue(Coroutine* cor);
+    std::mutex c_mutex;
 };
 }
 #endif
