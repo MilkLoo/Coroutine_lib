@@ -29,7 +29,7 @@ Scheduler::Scheduler(size_t threads,bool use_caller,const std::string& name):s_u
     {
 	threads--;
 	Coroutine::getCoroutine();
-	s_schedulerCoroutine.reset(new Coroutine(std::bind(&Scheduler::run,this),0,this));
+	s_schedulerCoroutine.reset(new Coroutine(std::bind(&Scheduler::run,this),0,false));
 	Coroutine::setSchedulerCortinue(s_schedulerCoroutine.get());
 	s_rootThread = Thread::GetThreadID();
 	s_threadIDs.push_back(s_rootThread);
